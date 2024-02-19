@@ -1,4 +1,4 @@
-![image](https://user-images.githubusercontent.com/487999/79708354-29074a80-82fa-11ea-80df-0db3962fb453.png)
+![image](https://github.com/chaerim94/labshoppubsub/assets/39048893/d780e53e-b820-48e9-b5de-bf66a5bd6b3d)
 
 # 예제 - 음식배달
 
