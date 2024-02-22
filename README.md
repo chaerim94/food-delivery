@@ -96,7 +96,7 @@ cd gateway
 mvn spring-boot:run
 ```
 
-## [단일 진입점 - Gateway]
+## [분산트랜잭션 - Saga, 단일 진입점 - Gateway]
 
 ```
 //재고생성
@@ -174,7 +174,7 @@ transfer-encoding: chunked
 {"eventType":"ReservationStatusChanged","timestamp":1708589736551,"orderId":1,"placeNm":"test01","status":"예약완료","usrId":"2","strDt":"1970-01-01T05:37:20.221+00:00","endDt":"1970-01-01T05:37:20.222+00:00","qty":1,"amount":5000.0,"placeId":1}
 ```
 
-## [분산트랜잭션 - Saga, 보상트랜젝션 확인]
+## [보상트랜젝션 확인]
 ```
 gitpod /workspace/reserveplace-v3 (main) $ http POST localhost:8080/accommodations placeNm=test01 status=예약처리 usrId=33 strDt=20240221 endDt=20240222 qty=1 amount=5000 placeId=1
 HTTP/1.1 201 Created
@@ -252,10 +252,206 @@ Vary: Access-Control-Request-Headers
 ## CI/CD 설정
 
 
-각 구현체들은 각자의 source repository 에 구성되었고, 사용한 CI/CD 플랫폼은 GCP를 사용하였으며, pipeline build script 는 각 프로젝트 폴더 이하에 cloudbuild.yml 에 포함되었다.
+aws CodeBuild를 활용한 CI/CD 처리, pipeline build script 는 buildspec.yml 에 포함되었다.
+```
+version: 0.2
+
+env:
+  variables:
+    IMAGE_REPO_NAME: "user20-gateway"
+
+phases:
+  install:
+    runtime-versions:
+      java: corretto17
+      docker: 20
+  pre_build:
+    commands:
+      - cd gateway
+      - echo Logging in to Amazon ECR...
+      - echo $IMAGE_REPO_NAME
+      - echo $AWS_ACCOUNT_ID
+      - echo $AWS_DEFAULT_REGION
+      - echo $CODEBUILD_RESOLVED_SOURCE_VERSION
+      - echo start command
+      - $(aws ecr get-login --no-include-email --region $AWS_DEFAULT_REGION)
+  build:
+    commands:
+      - echo Build started on `date`
+      - echo Building the Docker image...
+      - mvn package -Dmaven.test.skip=true
+      - docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$CODEBUILD_RESOLVED_SOURCE_VERSION  .
+  post_build:
+    commands:
+      - echo Build completed on `date`
+      - echo Pushing the Docker image...
+      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$CODEBUILD_RESOLVED_SOURCE_VERSION
+
+#cache:
+#  paths:
+#    - '/root/.m2/**/*'
+```
+
+- 프로젝트 빌드 결과
+![KakaoTalk_20240222_172420432_01](https://github.com/chaerim94/food-delivery/assets/39048893/dd8b4f16-d326-4143-920f-c7b4c42798f1)
+
+- 프라이빗 ECR 결과
+![KakaoTalk_20240222_172420432](https://github.com/chaerim94/food-delivery/assets/39048893/c8a97f83-42e5-4c0e-b311-fd9bb769cd6f)
 
 
-## 동기식 호출 / 서킷 브레이킹 / 장애격리
+
+## 컨테이너 자동확장 - HPA 
+
+- Kubernetes 클러스터에 Metrics Server를 배포하여 리소스 모니터링을 활성화
+```
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+kubectl get deployment metrics-server -n kube-system
+```
+
+- deployment.yaml 아래 추가
+```
+containers:
+        - name: admin
+          image: khsh5592/admin:240221
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: "200m"
+```
+
+- Kubernetes 클러스터에서 place 디플로이먼트를 자동으로 확장
+```
+//cpu-percent=50: CPU 사용률이 50%를 넘으면 자동으로 스케일링을 시작
+//min=1: 최소 파드 수를 1로 설정합니다. 따라서 최소 1개의 파드가 항상 실행
+//max=3: 최대 파드 수를 3으로 설정합니다. 따라서 파드 수는 최대 3개까지 확장
+kubectl autoscale deployment place --cpu-percent=50 --min=1 --max=3
+```
+
+- 부하 테스트 Pod 설치 후 부하 발생
+```
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: siege
+spec:
+  containers:
+  - name: siege
+    image: apexacme/siege-nginx
+EOF
+
+$ kubectl exec -it siege -- /bin/bash
+$ siege -c20 -t40S -v http://10.100.106.43:8080/
+
+HTTP/1.1 200     0.00 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.01 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.01 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.00 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.03 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.01 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.01 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.01 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.02 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.01 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.02 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.01 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.02 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.00 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.01 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.01 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.00 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.01 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.01 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.00 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.00 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.02 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.00 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.01 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.00 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.01 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.06 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.43 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.06 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.30 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.49 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.48 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.14 secs:     361 bytes ==> GET  /
+HTTP/1.1 200     0.53 secs:     361 bytes ==> GET  /
+
+Lifting the server siege...
+Transactions:                  25600 hits
+Availability:                 100.00 %
+Elapsed time:                  39.25 secs
+Data transferred:               8.81 MB
+Response time:                  0.03 secs
+Transaction rate:             652.23 trans/sec
+Throughput:                     0.22 MB/sec
+Concurrency:                   17.49
+Successful transactions:       25601
+Failed transactions:               0
+Longest transaction:            0.91
+Shortest transaction:           0.00
+ 
+HTTP/1.1 200     0.30 secs:     361 bytes ==> GET  /
+```
+
+- autoscale 결과
+```
+gitpod /workspace/reserveplace-v3 (main) $ kubectl get all
+NAME                                READY   STATUS    RESTARTS   AGE
+pod/customer-dbddf74c7-vf5mf        1/1     Running   0          91m
+pod/gateway-55b7667485-9gvdk        1/1     Running   0          91m
+pod/my-kafka-0                      1/1     Running   0          98m
+pod/notification-66cc75c68d-lknhw   1/1     Running   0          91m
+pod/payment-7c65bb8db5-j94cd        1/1     Running   0          92m
+pod/place-5c5487ff9d-72rsb          1/1     Running   0          9m43s
+pod/place-5c5487ff9d-7w4mz          0/1     Running   0          35s
+pod/place-5c5487ff9d-kp7q9          0/1     Running   0          35s
+pod/siege                           1/1     Running   0          2m58s
+
+NAME                        TYPE           CLUSTER-IP       EXTERNAL-IP                                                              PORT(S)                      AGE
+service/customer            ClusterIP      10.100.237.171   <none>                                                                   8080/TCP                     91m
+service/gateway             LoadBalancer   10.100.203.15    a97bdf07dceef4c81a91fe5dfc486a93-940952681.eu-west-2.elb.amazonaws.com   8080:31929/TCP               91m
+service/kubernetes          ClusterIP      10.100.0.1       <none>                                                                   443/TCP                      98m
+service/my-kafka            ClusterIP      10.100.52.181    <none>                                                                   9092/TCP                     98m
+service/my-kafka-headless   ClusterIP      None             <none>                                                                   9092/TCP,9094/TCP,9093/TCP   98m
+service/notification        ClusterIP      10.100.140.110   <none>                                                                   8080/TCP                     91m
+service/payment             ClusterIP      10.100.54.158    <none>                                                                   8080/TCP                     92m
+service/place               ClusterIP      10.100.106.43    <none>                                                                   8080/TCP                     9m34s
+
+NAME                           READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/customer       1/1     1            1           91m
+deployment.apps/gateway        1/1     1            1           91m
+deployment.apps/notification   1/1     1            1           91m
+deployment.apps/payment        1/1     1            1           92m
+deployment.apps/place          1/3     3            1           9m43s
+
+NAME                                      DESIRED   CURRENT   READY   AGE
+replicaset.apps/customer-dbddf74c7        1         1         1       91m
+replicaset.apps/gateway-55b7667485        1         1         1       91m
+replicaset.apps/notification-66cc75c68d   1         1         1       92m
+replicaset.apps/payment-7c65bb8db5        1         1         1       92m
+replicaset.apps/place-5c5487ff9d          3         3         1       9m44s
+
+NAME                        READY   AGE
+statefulset.apps/my-kafka   1/1     98m
+
+NAME                                        REFERENCE          TARGETS    MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/place   Deployment/place   792%/50%   1         3         3          8m22s
+```
+
+
+
+
+
+
+
+
+
+
+
+
 
 * 서킷 브레이킹 프레임워크의 선택: Spring FeignClient + Hystrix 옵션을 사용하여 구현함
 
