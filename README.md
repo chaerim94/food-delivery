@@ -96,10 +96,10 @@ cd gateway
 mvn spring-boot:run
 ```
 
-## 분산트랜잭션 - Saga
+## [단일 진입점 - Gateway]
 
-# 재고생성
 ```
+//재고생성
 gitpod /workspace/reserveplace-v3 (main) $ http POST localhost:8080/reservationManagements placeId=1 stock=1
 
 HTTP/1.1 201 Created
@@ -129,9 +129,8 @@ transfer-encoding: chunked
     "orderId": null,
     "stock": 1
 }
-```
-# 숙소예약
-```
+
+//숙소예약
 gitpod /workspace/reserveplace-v3 (main) $ http POST localhost:8080/accommodations placeNm=test01 status=예약처리 usrId=2 strDt=20240221 endDt=20240222 qty=1 amount=5000 placeId=1
 HTTP/1.1 201 Created
 Content-Type: application/json
@@ -164,8 +163,8 @@ transfer-encoding: chunked
     "usrId": "2"
 }
 ```
-# 토픽확인
 ```
+// 토픽확인
 [appuser@fcd4fde9e121 bin]$ ./kafka-console-consumer --bootstrap-server localhost:9092 --topic reserveplace  --from-beginning
 
 
@@ -175,7 +174,7 @@ transfer-encoding: chunked
 {"eventType":"ReservationStatusChanged","timestamp":1708589736551,"orderId":1,"placeNm":"test01","status":"예약완료","usrId":"2","strDt":"1970-01-01T05:37:20.221+00:00","endDt":"1970-01-01T05:37:20.222+00:00","qty":1,"amount":5000.0,"placeId":1}
 ```
 
-# 보상트랜젝션 확인
+## [분산트랜잭션 - Saga, 보상트랜젝션 확인]
 ```
 gitpod /workspace/reserveplace-v3 (main) $ http POST localhost:8080/accommodations placeNm=test01 status=예약처리 usrId=33 strDt=20240221 endDt=20240222 qty=1 amount=5000 placeId=1
 HTTP/1.1 201 Created
@@ -218,7 +217,7 @@ transfer-encoding: chunked
 {"eventType":"ReservationCanceled","timestamp":1708589801201,"orderId":2,"placeNm":null,"status":"예약취소","usrId":null,"strDt":null,"endDt":null,"qty":null,"amount":null,"placeId":null}
 ```
 
-# CQRS - mypage
+## [CQRS - mypage]
 ```
 gitpod /workspace/reserveplace-v3 (main) $ http :8086/mypages/1
 HTTP/1.1 200 
