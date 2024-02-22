@@ -9,7 +9,7 @@
 - [예제 - 숙박예약](#---)
   - [서비스 시나리오](#서비스-시나리오)
   - [분석/설계](#분석설계)
-    - [클라우드 아키텍처 구성, MSA 아키텍처 구성도](#클라우드아키텍처 구성,MSA아키텍처구성도)
+    - [클라우드 아키텍처 구성, MSA 아키텍처 구성도](#클라우드아키텍처구성,MSA아키텍처구성도)
     - [도메인분석 - 이벤트스토밍](#도메인분석-이벤트스토밍)
   - [구현:](#구현-)
     - [분산트랜잭션 - Saga](#분산트랜잭션-Saga)
@@ -51,6 +51,7 @@
 
 
 ## 클라우드 아키텍처 구성, MSA 아키텍처 구성도
+![image](https://github.com/chaerim94/food-delivery/assets/39048893/d7fbef75-f26f-4580-9994-267dd5a2bd82)
 
 
 ## Event Storming 결과
@@ -982,7 +983,6 @@ rate(istio_requests_total{app="place",destination_service="place.hotel.svc.clust
 ![KakaoTalk_20240222_172406171_15](https://github.com/chaerim94/food-delivery/assets/39048893/77f59da0-507d-47ea-8e50-b0fec5a33139)
 ![KakaoTalk_20240222_172406171_17](https://github.com/chaerim94/food-delivery/assets/39048893/89f2490d-22a8-441a-aa89-c1521fc2a593)
 
-![KakaoTalk_20240222_172406171_01](https://github.com/chaerim94/food-delivery/assets/39048893/6f54be83-5a8a-4ce3-9cc6-f1773cf3ec30)
 
 - 부하테스트
 ```
