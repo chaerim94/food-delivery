@@ -784,15 +784,16 @@ place-exec                 1/1     Running            4 (31s ago)   96s
 
 
 # 서비스 메쉬 응용 - Istio
-``
-// Istio 설치
+
+-  Istio 설치
+```
 export ISTIO_VERSION=1.18.1
 curl -L https://istio.io/downloadIstio | ISTIO_VERSION=$ISTIO_VERSION TARGET_ARCH=x86_64 sh -
 export PATH=$PWD/bin:$PATH // 경로세팅
 istioctl install --set profile=demo --set hub=gcr.io/istio-release // demo를 기반으로 core모듈 설치
 kubectl get ns // 네임스페이스 생성확인
 kubectl get all -n istio-system // 객체생성확인
-``
+```
 ```
 // Istio add-on Dashboard 설치
 mv samples/addons/loki.yaml samples/addons/loki.yaml.old
