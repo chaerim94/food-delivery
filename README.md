@@ -443,6 +443,180 @@ horizontalpodautoscaler.autoscaling/place   Deployment/place   792%/50%   1     
 
 
 
+## 컨테이너로부터 환경분리 - CofigMap
+
+- 진행 전 application-resource.yaml 파일에 logging 이 추가된 docker image를 사용
+- 데이터베이스 연결 정보와 로그 레벨을 ConfigMap에 저장하여 관리
+```
+$ kubectl apply -f - <<EOF
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-dev
+  namespace: default
+data:
+  ORDER_DB_URL: jdbc:mysql://mysql:3306/connectdb1?serverTimezone=Asia/Seoul&useSSL=false
+  ORDER_DB_USER: myuser
+  ORDER_DB_PASS: mypass
+  ORDER_LOG_LEVEL: DEBUG
+EOF
+```
+
+```
+gitpod /workspace/reserveplace-v3/place (main) $ kubectl get configmap
+NAME               DATA   AGE
+config-dev         4      12s
+kube-root-ca.crt   1      4h54m
+my-kafka-scripts   1      119m
+
+gitpod /workspace/reserveplace-v3/place (main) $ kubectl get configmap config-dev -o yaml
+apiVersion: v1
+data:
+  ORDER_DB_PASS: mypass
+  ORDER_DB_URL: jdbc:mysql://mysql:3306/connectdb1?serverTimezone=Asia/Seoul&useSSL=false
+  ORDER_DB_USER: myuser
+  ORDER_LOG_LEVEL: DEBUG
+kind: ConfigMap
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"v1","data":{"ORDER_DB_PASS":"mypass","ORDER_DB_URL":"jdbc:mysql://mysql:3306/connectdb1?serverTimezone=Asia/Seoul\u0026useSSL=false","ORDER_DB_USER":"myuser","ORDER_LOG_LEVEL":"DEBUG"},"kind":"ConfigMap","metadata":{"annotations":{},"name":"config-dev","namespace":"default"}}
+  creationTimestamp: "2024-02-21T10:11:30Z"
+  name: config-dev
+  namespace: default
+  resourceVersion: "65163"
+  uid: 43da75be-815e-4101-b54b-a22d8bdcfc8c
+```
+
+
+- place 재배포 후 로그 레벨 INFO에서 DEBUG 변경 확인 >>> kubectl logs -l app=place
+``` 
+gitpod /workspace/reserveplace-v3/place (main) $ kubectl logs -l app=place
+2024-02-21 19:54:59.047 DEBUG [place,,,] 1 --- [container-0-C-1] o.a.kafka.clients.FetchSessionHandler    : [Consumer clientId=consumer-place-2, groupId=place] Node 0 sent an incremental fetch response with throttleTimeMs = 0 for session 1598538034 with 0 response partition(s), 1 implied partition(s)
+2024-02-21 19:54:59.048 DEBUG [place,,,] 1 --- [container-0-C-1] o.a.k.c.consumer.internals.Fetcher       : [Consumer clientId=consumer-place-2, groupId=place] Added READ_UNCOMMITTED fetch request for partition reserveplace-0 at position FetchPosition{offset=2, offsetEpoch=Optional.empty, currentLeader=LeaderAndEpoch{leader=Optional[my-kafka-0.my-kafka-headless.default.svc.cluster.local:9092 (id: 0 rack: null)], epoch=0}} to node my-kafka-0.my-kafka-headless.default.svc.cluster.local:9092 (id: 0 rack: null)
+2024-02-21 19:54:59.048 DEBUG [place,,,] 1 --- [container-0-C-1] o.a.kafka.clients.FetchSessionHandler    : [Consumer clientId=consumer-place-2, groupId=place] Built incremental fetch (sessionId=1598538034, epoch=41) for node 0. Added 0 partition(s), altered 0 partition(s), removed 0 partition(s) out of 1 partition(s)
+2024-02-21 19:54:59.048 DEBUG [place,,,] 1 --- [container-0-C-1] o.a.k.c.consumer.internals.Fetcher       : [Consumer clientId=consumer-place-2, groupId=place] Sending READ_UNCOMMITTED IncrementalFetchRequest(toSend=(), toForget=(), implied=(reserveplace-0)) to broker my-kafka-0.my-kafka-headless.default.svc.cluster.local:9092 (id: 0 rack: null)
+2024-02-21 19:54:59.310 DEBUG [place,,,] 1 --- [-thread | place] o.a.k.c.c.internals.AbstractCoordinator  : [Consumer clientId=consumer-place-2, groupId=place] Sending Heartbeat request with generation 12 and member id consumer-place-2-69ac14f5-d696-4d3b-bf32-c1a501286d65 to coordinator my-kafka-0.my-kafka-headless.default.svc.cluster.local:9092 (id: 2147483647 rack: null)
+2024-02-21 19:54:59.312 DEBUG [place,,,] 1 --- [container-0-C-1] o.a.k.c.c.internals.AbstractCoordinator  : [Consumer clientId=consumer-place-2, groupId=place] Received successful Heartbeat response
+2024-02-21 19:54:59.551 DEBUG [place,,,] 1 --- [container-0-C-1] o.a.kafka.clients.FetchSessionHandler    : [Consumer clientId=consumer-place-2, groupId=place] Node 0 sent an incremental fetch response with throttleTimeMs = 0 for session 1598538034 with 0 response partition(s), 1 implied partition(s)
+2024-02-21 19:54:59.551 DEBUG [place,,,] 1 --- [container-0-C-1] o.a.k.c.consumer.internals.Fetcher       : [Consumer clientId=consumer-place-2, groupId=place] Added READ_UNCOMMITTED fetch request for partition reserveplace-0 at position FetchPosition{offset=2, offsetEpoch=Optional.empty, currentLeader=LeaderAndEpoch{leader=Optional[my-kafka-0.my-kafka-headless.default.svc.cluster.local:9092 (id: 0 rack: null)], epoch=0}} to node my-kafka-0.my-kafka-headless.default.svc.cluster.local:9092 (id: 0 rack: null)
+2024-02-21 19:54:59.551 DEBUG [place,,,] 1 --- [container-0-C-1] o.a.kafka.clients.FetchSessionHandler    : [Consumer clientId=consumer-place-2, groupId=place] Built incremental fetch (sessionId=1598538034, epoch=42) for node 0. Added 0 partition(s), altered 0 partition(s), removed 0 partition(s) out of 1 partition(s)
+2024-02-21 19:54:59.551 DEBUG [place,,,] 1 --- [container-0-C-1] o.a.k.c.consumer.internals.Fetcher       : [Consumer clientId=consumer-place-2, groupId=place] Sending READ_UNCOMMITTED IncrementalFetchReque
+
+```
+
+
+## 클라우드스토리지 활용 - PVC 
+
+```
+// Kubernetes 클러스터에 PersistentVolumeClaim 생성
+$ kubectl apply -f - <<EOF
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ebs-pvc
+  labels:
+    app: ebs-pvc
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Mi
+  storageClassName: ebs-sc
+EOF
+
+gitpod /workspace/reserveplace-v3/place (main) $ kubectl get pvc
+NAME              STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+data-my-kafka-0   Bound    pvc-596060f8-96c1-4bbc-b56c-4b14160ea88e   8Gi        RWO            ebs-sc         5h56m
+ebs-pvc           Bound    pvc-d55fe6ea-c007-4edc-a074-8ecbb3fcb16f   1Gi        RWO            ebs-sc         4m32s
+gitpod /workspace/reserveplace-v3/place (main) $ kubectl get pv
+NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                     STORAGECLASS   REASON   AGE
+pvc-596060f8-96c1-4bbc-b56c-4b14160ea88e   8Gi        RWO            Delete           Bound    default/data-my-kafka-0   ebs-sc                  5h56m
+pvc-d55fe6ea-c007-4edc-a074-8ecbb3fcb16f   1Gi        RWO            Delete           Bound    default/ebs-pvc           ebs-sc                  11s
+```
+
+```
+// place서비스를 배포할 pvcconfig.yaml 생성
+apiVersion: "apps/v1"
+kind: "Deployment"
+metadata:
+  name: place
+  labels:
+    app: "place"
+spec:
+  selector:
+    matchLabels:
+      app: "place"
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: "place"
+    spec:
+      containers:
+      - name: "place"
+        image: chather/place:0222
+        ports:
+          - containerPort: 8080
+        volumeMounts: # 컨테이너에 마운트할 볼륨을 정의
+          - mountPath: "/mnt/data" # 볼륨을 마운트할 경로를 지정
+            name: volume
+      volumes: # Pod에 사용될 볼륨을 정의
+      - name: volume
+        persistentVolumeClaim:
+           claimName: ebs-pvc 
+```
+
+```
+gitpod /workspace/reserveplace-v3/place (main) $ kubectl delete -f pvcconfig.yaml 
+deployment.apps "place" deleted
+gitpod /workspace/reserveplace-v3/place (main) $ kubectl apply -f pvcconfig.yaml 
+deployment.apps/place created
+
+gitpod /workspace/reserveplace-v3/place (main) $ kubectl get pod
+NAME                            READY   STATUS    RESTARTS   AGE
+customer-dbddf74c7-vf5mf        1/1     Running   0          4h29m
+gateway-55b7667485-9gvdk        1/1     Running   0          4h30m
+my-kafka-0                      1/1     Running   0          4h36m
+notification-66cc75c68d-lknhw   1/1     Running   0          4h30m
+payment-7c65bb8db5-j94cd        1/1     Running   0          4h31m
+place-79bdb44547-j4wrd          1/1     Running   0          22s
+siege                           1/1     Running   0          3h1m                   
+```
+- place Pod에 대해 쉘을 실행하고, /mnt/data 경로에 MOUNT_TEST.TEST 테스트 파일 생성
+```         
+gitpod /workspace/reserveplace-v3/place (main) $ kubectl exec -it pod/place-79bdb44547-j4wrd -- /bin/sh
+/ # cd /mnt/data
+/mnt/data # ls
+lost+found
+/mnt/data #  touch MOUNT_TEST.TEST
+/mnt/data # ls
+MOUNT_TEST.TEST  lost+found
+/mnt/data # exit
+```
+- place 서비스 중지 후 다시 배포하였을때 클라우드스토리지에 생성한 MOUNT_TEST.TEST 테스트 파일이 조회되어야한다.
+```
+gitpod /workspace/reserveplace-v3/place (main) $ kubectl delete -f pvcconfig.yaml 
+deployment.apps "place" deleted
+gitpod /workspace/reserveplace-v3/place (main) $ kubectl apply -f pvcconfig.yaml 
+deployment.apps/place created
+gitpod /workspace/reserveplace-v3/place (main) $ kubectl get pod
+NAME                            READY   STATUS              RESTARTS   AGE
+customer-dbddf74c7-vf5mf        1/1     Running             0          4h32m
+gateway-55b7667485-9gvdk        1/1     Running             0          4h32m
+my-kafka-0                      1/1     Running             0          4h39m
+notification-66cc75c68d-lknhw   1/1     Running             0          4h33m
+payment-7c65bb8db5-j94cd        1/1     Running             0          4h34m
+place-79bdb44547-vzcsx          0/1     ContainerCreating   0          7s
+siege                           1/1     Running             0          3h4m
+gitpod /workspace/reserveplace-v3/place (main) $ kubectl exec -it pod/place-79bdb44547-vzcsx -- /bin/sh
+/ # ls /mnt/data
+MOUNT_TEST.TEST  lost+found
+/ # 
+```
+
+
 
 
 
